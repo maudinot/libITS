@@ -317,13 +317,13 @@ void ITSModel::printPaths (State init, State toreach, State reach, size_t limit)
 	revcomponents.push_front(toreach);
 	// Reverse construct path to init from toreach
 	Transition revTrans = getPredRel(reach);
+	std::vector<rev_t> allrevcomponents;
 	//    int step =0;
 	while (true) {
 		M2 = State::null;
 
-		// Remove states from previous step, they cannot be nearer to the goal.
+		// Remove states from previous steps, they cannot be nearer to the goal.
 		M2 = revTrans (M3) - seen;
-		seen = seen + M2;
 		// USEFUL DEBUG TRACES
 		//       std::cerr << "step " << step++ <<  "  nbstates " << M2.nbStates() <<  endl;
 		//       getInstance()->getType()->printState(M2,std::cerr);
@@ -332,17 +332,14 @@ void ITSModel::printPaths (State init, State toreach, State reach, size_t limit)
 		//        M2 = M2 + ( ((*it) (M3))  * ss );
 		//      }
 
-		// should not happen if the states searched for are rechable by the transition relation
+		// If we go back to much behind the initial states, we might end up nowhere
 		if (M2 == State::null) {
-			std::cerr << "Unexpected empty predecessor set for step : " <<std::endl;
-			getInstance()->getType()->printState(M3,std::cerr);
-			std::cerr << "returning empty witness path."<< std::endl;
-			std::cerr << "Was working with reverse transition :\n" << revTrans << endl;
-			std::cerr << "Was working with forward transition :\n" << getNextRel() << endl;
-			return ;
+			cerr << "Error M2 was empty" << endl;
+			break;
 		}//assert(M2 != GSDD::null);
 
 		if (init * M2 == GSDD::null) {
+			seen = seen + M2;
 			revcomponents.push_front(M2);
 			//       cerr << "Backward steps : "<<  revcomponents.size() << endl ;
 			//       cerr << "Current step-set size : "<< M2.nbStates() << endl;
@@ -355,13 +352,37 @@ void ITSModel::printPaths (State init, State toreach, State reach, size_t limit)
 				return ;
 			}
 			M3 = M2;
-		} else {
+		} else if (M2 - init == GSDD::null) {
+			allrevcomponents.push_back(revcomponents);
 			break;
+		} else {//assert(M2 - init != GSDD::null);
+			State M2ni = M2 - init;
+			seen = seen + M2ni;
+			allrevcomponents.push_back(revcomponents);
+			revcomponents.push_front(M2ni);
+			M3 = M2ni;
 		}
 	}
 
-	cerr << "Length of minimal path(s) :" << revcomponents.size() <<endl;
+	cerr << "number of revcomponents: " << allrevcomponents.size() <<endl;
 
+	rev_t& shortestrevcomponents = allrevcomponents.front();
+
+	cerr << "Length of minimal path(s): " << shortestrevcomponents.size() <<endl;
+
+	rev_t& longestrevcomponents = allrevcomponents.back();
+
+	cerr << "Length of maximal (acyclic) path(s): " << longestrevcomponents.size() <<endl;
+
+	for(auto it = allrevcomponents.begin(); it != allrevcomponents.end(); it++) {
+		limit = printWitnesses(*it, limit, init, toreach, reach);
+		if(limit == 0) break;
+	}
+}
+
+size_t ITSModel::printWitnesses (std::list<State> & revcomponents, size_t limit, State init, State toreach, State reachable) const {
+	typedef std::list<State> rev_t;
+	typedef rev_t::iterator rev_it;
 	// Forward construction of witness
 
 	Type::namedTrs_t namedTrs;
@@ -371,7 +392,7 @@ void ITSModel::printPaths (State init, State toreach, State reach, size_t limit)
 	for (size_t i=0; i < revcomponents.size(); i++) {
 		iters.push_back(0);
 	}
-	//    iters[0]=10;
+
 	for (size_t nbwitness=0 ; nbwitness < limit ; ) {
 		State Mi = init;
 		State Mi_next = State::null;
@@ -444,7 +465,7 @@ void ITSModel::printPaths (State init, State toreach, State reach, size_t limit)
 							// forward step
 							*next = (*next) * it->second(*cur);
 							// backward
-							Transition revt = it->second.invert(reach);
+							Transition revt = it->second.invert(reachable);
 							*cur = (*cur) *  revt( *next ) ;
 							break;
 						}
@@ -464,9 +485,9 @@ void ITSModel::printPaths (State init, State toreach, State reach, size_t limit)
 				State remain = init - getPredRel() (* revcomponents.begin());
 				if (nbwitness < limit && remain != State::null) {
 					// recurse
-					printPaths(remain,toreach,reach,limit -nbwitness);
+					return printWitnesses(revcomponents, limit-nbwitness, remain, toreach, reachable);
 				}
-				return;
+				return limit-nbwitness;
 			} else {
 				//	  std::cout << "Trying next trans at step " << cur-1 << " of path " <<  std::endl;
 
@@ -479,8 +500,9 @@ void ITSModel::printPaths (State init, State toreach, State reach, size_t limit)
 		}
 
 	}
-
+	return 0;
 }
+
 
 class ExtractOneState {
 private:

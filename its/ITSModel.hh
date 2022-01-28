@@ -91,7 +91,7 @@ private:
   // to control trace behavior
   bool printStatesInTrace_;
   // a helper used in multi witness scenario
-  int printWitnesses (const std::list<State> & revcomponents, size_t limit, State init, State toreach) const ;
+  size_t printWitnesses (std::list<State> & revcomponents, size_t limit, State init, State toreach, State reachable) const ;
 
 public:
   // add a type to the type declarations
