@@ -196,6 +196,7 @@ public:
   path_t findPath (State init, State toreach, State reach, bool precise=false) const;  
   path_t findCycle (State init, State scc) const;  
   void printPaths (State init, State toreach, State reach, size_t limit) const;
+  void printLongerPaths (State init, State toreach, State reachable, size_t limit) const;
   /** Prints a set of states to a string. The printing invokes the main instance's type's printing mechanism.
    ** The limit is used to avoid excessive sizes of output : only the first "limit" states (or an approximation thereof in SDD context) are shown. **/
   void printSomeStates (State states, std::ostream & out, size_t limit) const;
