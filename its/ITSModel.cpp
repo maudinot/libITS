@@ -484,6 +484,7 @@ void ITSModel::printPaths (State init, State toreach, State reach, size_t limit)
 
 class PathTree {
 private:
+	friend class PathTreeInternal;
 	class PathTreeInternal {
 	private:
 		PathTree *container;
@@ -494,10 +495,10 @@ private:
 		PathTreeInternal(PathTreeInternal *parent, Transition index) {
 			container = parent->container;
 			this->parent = parent;
-			transition = index;
+			transition = &index;
 			State seen = getSeen();
 			states = index.invert(container->reachable)(parent->states) - seen;
-			children = std::list<PathTreeInternal>();
+			children = std::vector<PathTreeInternal>();
 		}
 		State getSeen() {
 			State result = GSDD::null;
@@ -514,31 +515,48 @@ private:
 			parent = nullptr;
 			transition = nullptr;
 			states = toReach;
-			children = std::list<PathTreeInternal>();
+			children = std::vector<PathTreeInternal>();
+		}
+		std::vector<PathTreeInternal> & getChildren() {
+			return children;
+		}
+		PathTreeInternal * getParent() const {
+			return parent;
+		}
+		const State& getStates() const {
+			return states;
+		}
+		Transition * getTransition() const {
+			return transition;
+		}
+		void allocateChildren() {
+			for(auto it = container->transitions.cbegin(); it != container->transitions.cend(); it++) {
+				children.push_back(PathTreeInternal(this, *it));
+			}
 		}
 	};
-	//The internal object representing the tree
-	PathTreeInternal root;
 	//transitions in order to index the children
 	std::list<Transition> transitions;
 	//Set of reachable states, for inverting transitions
 	State reachable;
+	//The internal object representing the tree
+	PathTreeInternal root;
 public:
 	class iterator {
 	private:
 		const PathTree &_root;
 		PathTreeInternal * position;
-		std::list<int> indexes;
+		std::list<long unsigned int> indexes;
 		void next() {
-			if(position->states == GSDD::null) {
+			if(position->getStates() == GSDD::null) {
 				//prune the entire subtree and go RIGHT, or UP if last sibling
 				while (!indexes.empty()) {
-					if (indexes.back() < transitions.size()) {
+					if (indexes.back() < _root.transitions.size()) {
 						//RIGHT
 						int nextid = indexes.back() + 1;
 						indexes.pop_back();
 						indexes.push_back(nextid);
-						position->parent->children.at(nextid);
+						position->getParent()->getChildren().at(nextid);
 						break;
 					} else {
 						//UP
@@ -547,48 +565,45 @@ public:
 				}
 			} else {
 				//DOWN
-				if(position->children.empty()) {
+				if(position->getChildren().empty()) {
 					//First, create the children
-					for(auto it = transitions.cbegin(); it != transitions.cend(); it++) {
-						position->children.push_back(PathTreeInternal(position, *it));
-					}
+					position->allocateChildren();
 				}
-				position = &position->children.at(0);
+				position = &position->getChildren().at(0);
 				indexes.push_back(0);
 			}
 		}
 	public:
-		iterator(const PathTree &root) : indexes() {
-			_root = root;
-			position = root.root;
+		iterator(PathTree &root) : _root(root), indexes() {
+			position = &(root.root);
 		}
 		iterator& operator++(int) {
 			next();
 			return *this;
 		}
 		bool hasNext() {
-			if(position->states != GSDD::null) //current position can continue DOWN
+			if(position->getStates() != GSDD::null) //current position can continue DOWN
 				return true;
 			for(auto it = indexes.cbegin(); it != indexes.cend(); it++) {
-				if(*it < transitions.size()) //current position can continue RIGHT at that point
+				if(*it < _root.transitions.size()) //current position can continue RIGHT at that point
 					return true;
 			}
 			return false;
 		}
 		State getStates() {
-			return position->states;
+			return position->getStates();
 		}
 		std::list<Transition> getPathTo() {
 			std::list<Transition> result = std::list<Transition>();
 			PathTreeInternal * ptr = position;
 			while(ptr != nullptr) {
-				result.push_back(*ptr->transition);
-				ptr = ptr->parent;
+				result.push_back(*ptr->getTransition());
+				ptr = ptr->getParent();
 			}
 			return result;
 		}
 	};
-	PathTree(const std::list<Transition> & transitionstocopy, State reachable) : transitions(transitionstocopy), reachable(reachable), root(&transitions) {}
+	PathTree(const std::list<Transition> & transitionstocopy, State reachable, State toReach) : transitions(transitionstocopy), reachable(reachable), root(this, toReach) {}
 	iterator begin() {
 		return iterator(*this);
 	}
