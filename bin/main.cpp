@@ -55,6 +55,7 @@ static std::string modelName = "";
 static std::string invariantExpr = "";
 static bool doInvariant = false;
 static bool doFrom = false;
+static bool longerwitnesses = false;
 // if BMC use is wanted, will be >0
 static int BMC = -1;
 static size_t fixobs_passes = 2;
@@ -166,6 +167,7 @@ void usage() {
   cerr<<  "    --init-gadget : suppose that the initial state is actually a precursor of initial states, i.e. initial states are successors of the initial state. (prototype flag, only used in manywitness scenario currently, may be replaced by another mechanism in future).)" << endl;
   cerr<<  "    --nowitness : disable trace computation and just return a yes/no answer (faster)." <<endl;
   cerr<<  "    -manywitness XXX : compute several traces (up to integer XXX) and print them." <<endl;
+  cerr<<  "    --longer-witnesses : use a more expensive algorithm to compute longer witnesses (requires -manywitness)" <<endl;
   cerr<<  "    --fixpass XXX : test for reachable states after XXX passes of fixpoint (default: 5000), use 0 to build full state space before testing" <<endl;
   cerr<<  "    Witness-graph flags : output the state space graph for the region of interest, replaces production of witness traces" <<endl;
   cerr<<  "    -wgo PATHPREFIX : generate dot output and decide where to output the witness graphs (default : $CWD/wg)" <<endl;
@@ -313,7 +315,9 @@ int main_noex (int argc, char **argv) {
      if (++i > argc)
      { cerr << "give trace after " << args[i-1] << endl; usage(); exit(1); }
      traceStr = args[i];
-   } else {
+	} else if (!strcmp(args[i], "--longer-witnesses")) {
+		longerwitnesses = true;
+	} else {
      cerr << "Error : incorrect Argument : "<<args[i] <<endl ; usage(); return 1;
    }
  }
@@ -567,7 +571,11 @@ int main_noex (int argc, char **argv) {
      if (hasInitializationGadget) {
        init = model.getNextRel() (initialSituation);
      }
-     model.printPaths(init, verify, reachable, nbwitness);
+     if(longerwitnesses) {
+    	 model.printLongerPaths(init, verify, reachable, nbwitness);
+     } else {
+    	 model.printPaths(init, verify, reachable, nbwitness);
+     }
    }
    if (dograph && verify != State::null) {
 	   labels_t vars;
