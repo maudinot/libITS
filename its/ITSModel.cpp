@@ -491,13 +491,13 @@ private:
 		State states;
 		std::vector<PathTreeInternal> children;
 		PathTreeInternal *parent;
-		Transition * transition;
-		PathTreeInternal(PathTreeInternal *parent, Transition index) {
+		Type::namedTr_t * transition;
+		PathTreeInternal(PathTreeInternal *parent, Type::namedTr_t index) {
 			container = parent->container;
 			this->parent = parent;
 			transition = &index;
 			State seen = getSeen();
-			states = index.invert(container->reachable)(parent->states) - seen;
+			states = index.second.invert(container->reachable)(parent->states) - seen;
 			children = std::vector<PathTreeInternal>();
 		}
 		State getSeen() {
@@ -526,7 +526,7 @@ private:
 		const State& getStates() const {
 			return states;
 		}
-		Transition * getTransition() const {
+		Type::namedTr_t * getTransition() const {
 			return transition;
 		}
 		void allocateChildren() {
@@ -536,7 +536,7 @@ private:
 		}
 	};
 	//transitions in order to index the children
-	std::list<Transition> transitions;
+	Type::namedTrs_t transitions;
 	//Set of reachable states, for inverting transitions
 	State reachable;
 	//The internal object representing the tree
@@ -550,6 +550,7 @@ public:
 		void next() {
 			if(position->getStates() == GSDD::null) {
 				//prune the entire subtree and go RIGHT, or UP if last sibling
+				//TODO free the memory of explored subtree
 				while (!indexes.empty()) {
 					if (indexes.back() < _root.transitions.size()) {
 						//RIGHT
@@ -593,24 +594,42 @@ public:
 		State getStates() {
 			return position->getStates();
 		}
-		std::list<Transition> getPathTo() {
-			std::list<Transition> result = std::list<Transition>();
+		path_t getPathTo(State init) {
+			labels_t labels = labels_t();
+			std::list<State> intermediatestates = std::list<State>();
 			PathTreeInternal * ptr = position;
+			//for the first intermediate state, we intersect with init
+			intermediatestates.push_back(ptr->getStates() * init);
+			if (ptr->getTransition() != nullptr) {
+				labels.push_back(ptr->getTransition()->first);
+			}
+			ptr = ptr->getParent();
 			while(ptr != nullptr) {
-				result.push_back(*ptr->getTransition());
+				if (ptr->getTransition() != nullptr) {
+					labels.push_back(ptr->getTransition()->first);
+				}
+				intermediatestates.push_back(ptr->getStates());
 				ptr = ptr->getParent();
 			}
-			return result;
+			return path_t(labels, intermediatestates.begin(), intermediatestates.end());
 		}
 	};
-	PathTree(const std::list<Transition> & transitionstocopy, State reachable, State toReach) : transitions(transitionstocopy), reachable(reachable), root(this, toReach) {}
+	PathTree(const Type::namedTrs_t & transitionstocopy, State reachable, State toReach) : transitions(transitionstocopy), reachable(reachable), root(this, toReach) {}
 	iterator begin() {
 		return iterator(*this);
 	}
 };
 
-void ITSModel::printLongerPaths (State init, State toreach, State reachable, size_t limit) const {
-	//TODO
+void ITSModel::printLongerPaths (State init, State toReach, State reachable, size_t limit) const {
+	//TODO take limit into account
+	Type::namedTrs_t namedTrs;
+	getNamedLocals(namedTrs);
+	PathTree pt(namedTrs, reachable, toReach);
+	for (PathTree::iterator it = pt.begin(); it.hasNext(); it++) {
+		if (it.getStates() * init != GSDD::null) {
+			printPath(it.getPathTo(init), std::cout, true);
+		}
+	}
 }
 
 class ExtractOneState {
