@@ -492,12 +492,12 @@ private:
 		std::vector<PathTreeInternal> children;
 		PathTreeInternal *parent;
 		Type::namedTr_t * transition;
-		PathTreeInternal(PathTreeInternal *parent, Type::namedTr_t index) {
+		PathTreeInternal(PathTreeInternal *parent, Type::namedTr_t * index) {
 			container = parent->container;
 			this->parent = parent;
-			transition = &index;
+			transition = index;
 			State seen = getSeen();
-			states = index.second.invert(container->reachable)(parent->states) - seen;
+			states = index->second.invert(container->reachable)(parent->states) - seen;
 			children = std::vector<PathTreeInternal>();
 		}
 		State getSeen() {
@@ -530,8 +530,8 @@ private:
 			return transition;
 		}
 		void allocateChildren() {
-			for(auto it = container->transitions.cbegin(); it != container->transitions.cend(); it++) {
-				children.push_back(PathTreeInternal(this, *it));
+			for(auto it = container->transitions.begin(); it != container->transitions.end(); it++) {
+				children.push_back(PathTreeInternal(this, &*it));
 			}
 		}
 	};
@@ -616,6 +616,13 @@ public:
 			}
 			return path_t(labels, intermediatestates.begin(), intermediatestates.end());
 		}
+		void printPosition() {
+			std::cout << "Current position: ";
+			for(auto it = indexes.cbegin(); it != indexes.cend(); it++) {
+				std::cout << *it << ", ";
+			}
+			std::cout << std::endl;
+		}
 	};
 	PathTree(const Type::namedTrs_t & transitionstocopy, State reachable, State toReach) : transitions(transitionstocopy), reachable(reachable), root(this, toReach) {}
 	iterator begin() {
@@ -629,6 +636,7 @@ void ITSModel::printLongerPaths (State init, State toReach, State reachable, siz
 	PathTree pt(namedTrs, reachable, toReach * reachable);
 	size_t remaining = limit;
 	for (PathTree::iterator it = pt.begin(); it.hasNext(); it++) {
+		//it.printPosition();
 		if (remaining == 0) {
 			break;
 		} else if (it.getStates() * init != State::null) {
