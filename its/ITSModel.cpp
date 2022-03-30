@@ -488,6 +488,7 @@ private:
 	class PathTreeInternal {
 	private:
 		PathTree *container;
+		State seen;
 		State states;
 		std::vector<PathTreeInternal> children;
 		PathTreeInternal *parent;
@@ -496,24 +497,16 @@ private:
 			container = parent->container;
 			this->parent = parent;
 			transition = index;
-			State seen = getSeen();
+			seen = parent->seen + parent->states;
 			states = index->second.invert(container->reachable)(parent->states) - seen;
 			children = std::vector<PathTreeInternal>();
-		}
-		State getSeen() {
-			State result = State::null;
-			PathTreeInternal * iter = this;
-			while(iter->parent != nullptr) {
-				iter = iter->parent;
-				result = result + iter->states;
-			}
-			return result;
 		}
 	public:
 		PathTreeInternal(PathTree *containerptr, State toReach) {
 			container = containerptr;
 			parent = nullptr;
 			transition = nullptr;
+			seen = State::null;
 			states = toReach;
 			children = std::vector<PathTreeInternal>();
 		}
