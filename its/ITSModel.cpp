@@ -550,7 +550,6 @@ public:
 		void next() {
 			if(position->getStates() == State::null) {
 				//prune the entire subtree and go RIGHT, or UP if last sibling
-				//TODO free the memory of explored subtree
 				while (!indexes.empty()) {
 					if (indexes.back() < _root.transitions.size() - 1) {
 						//RIGHT
@@ -563,6 +562,7 @@ public:
 						//UP
 						indexes.pop_back();
 						position = position->getParent();
+						position->getChildren().clear();
 					}
 				}
 			} else {
