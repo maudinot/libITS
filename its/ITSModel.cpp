@@ -501,7 +501,7 @@ private:
 			children = std::vector<PathTreeInternal>();
 		}
 		State getSeen() {
-			State result = GSDD::null;
+			State result = State::null;
 			PathTreeInternal * iter = this;
 			while(iter->parent != nullptr) {
 				iter = iter->parent;
@@ -548,20 +548,21 @@ public:
 		PathTreeInternal * position;
 		std::list<long unsigned int> indexes;
 		void next() {
-			if(position->getStates() == GSDD::null) {
+			if(position->getStates() == State::null) {
 				//prune the entire subtree and go RIGHT, or UP if last sibling
 				//TODO free the memory of explored subtree
 				while (!indexes.empty()) {
-					if (indexes.back() < _root.transitions.size()) {
+					if (indexes.back() < _root.transitions.size() - 1) {
 						//RIGHT
 						int nextid = indexes.back() + 1;
 						indexes.pop_back();
 						indexes.push_back(nextid);
-						position->getParent()->getChildren().at(nextid);
+						position = &position->getParent()->getChildren().at(nextid);
 						break;
 					} else {
 						//UP
 						indexes.pop_back();
+						position = position->getParent();
 					}
 				}
 			} else {
@@ -578,15 +579,17 @@ public:
 		iterator(PathTree &root) : _root(root), indexes() {
 			position = &(root.root);
 		}
-		iterator& operator++(int) {
+		void operator++() {
 			next();
-			return *this;
+		}
+		void operator++(int) {
+			next();
 		}
 		bool hasNext() {
-			if(position->getStates() != GSDD::null) //current position can continue DOWN
+			if(position->getStates() != State::null) //current position can continue DOWN
 				return true;
 			for(auto it = indexes.cbegin(); it != indexes.cend(); it++) {
-				if(*it < _root.transitions.size()) //current position can continue RIGHT at that point
+				if(*it < _root.transitions.size() - 1) //current position can continue RIGHT at that point
 					return true;
 			}
 			return false;
@@ -621,12 +624,15 @@ public:
 };
 
 void ITSModel::printLongerPaths (State init, State toReach, State reachable, size_t limit) const {
-	//TODO take limit into account
 	Type::namedTrs_t namedTrs;
 	getNamedLocals(namedTrs);
-	PathTree pt(namedTrs, reachable, toReach);
+	PathTree pt(namedTrs, reachable, toReach * reachable);
+	size_t remaining = limit;
 	for (PathTree::iterator it = pt.begin(); it.hasNext(); it++) {
-		if (it.getStates() * init != GSDD::null) {
+		if (remaining == 0) {
+			break;
+		} else if (it.getStates() * init != State::null) {
+			remaining--;
 			printPath(it.getPathTo(init), std::cout, true);
 		}
 	}
