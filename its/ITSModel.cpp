@@ -498,7 +498,8 @@ private:
 			this->parent = parent;
 			transition = index;
 			seen = parent->seen + parent->states;
-			states = index->second.invert(container->reachable)(parent->states) - seen;
+			Transition nextUnseen = fixpoint((container->model->getNextRel()+Transition::id) * (container->reachable - seen),true);
+			states = (index->second.invert(container->reachable)(parent->states) - seen) * nextUnseen(container->init);
 			children = std::vector<PathTreeInternal>();
 		}
 	public:
@@ -528,12 +529,16 @@ private:
 			}
 		}
 	};
-	//transitions in order to index the children
-	Type::namedTrs_t transitions;
+	//The ITS
+	const ITSModel * model;
 	//Set of reachable states, for inverting transitions
 	State reachable;
+	//Set of starting states, for intermediate reachability check
+	State init;
 	//The internal object representing the tree
 	PathTreeInternal root;
+	//transitions in order to index the children
+	Type::namedTrs_t transitions;
 public:
 	class iterator {
 	private:
@@ -617,17 +622,24 @@ public:
 			std::cout << std::endl;
 		}
 	};
-	PathTree(const Type::namedTrs_t & transitionstocopy, State reachable, State toReach) : transitions(transitionstocopy), reachable(reachable), root(this, toReach) {}
+	PathTree(const ITSModel * model, State init, State toReach, State reachable) : model(model), reachable(reachable), init(init), root(this, toReach) {
+		model->getNamedLocals(transitions);
+	}
 	iterator begin() {
 		return iterator(*this);
 	}
 };
 
 void ITSModel::printLongerPaths (State init, State toReach, State reachable, size_t limit) const {
-	Type::namedTrs_t namedTrs;
-	getNamedLocals(namedTrs);
-	PathTree pt(namedTrs, reachable, toReach * reachable);
+	//restrict to co-reachable states
+	Transition rev = fixpoint(getPredRel(reachable)+Transition::id,true);
+	State coreachable = rev(toReach);
+	reachable = reachable * coreachable;
+	init = init * coreachable;
+	//create the PathTree
+	PathTree pt(this, init, toReach * reachable, reachable);
 	size_t remaining = limit;
+	//Iterate DFS on the PathTree
 	for (PathTree::iterator it = pt.begin(); it.hasNext(); it++) {
 		//it.printPosition();
 		if (remaining == 0) {
@@ -637,6 +649,11 @@ void ITSModel::printLongerPaths (State init, State toReach, State reachable, siz
 			printPath(it.getPathTo(init), std::cout, true);
 		}
 	}
+	std::cout << "Found " << limit - remaining << " witnesses.";
+	if(remaining == 0) {
+		std::cout << " There may be more (stopped prematurely).";
+	}
+	std::cout << std::endl;
 }
 
 class ExtractOneState {
